@@ -23,21 +23,27 @@ class MetricsCalculator:
     def get_all_metrics(
             self,
             actual_interactions: typing.Iterable[REC],
-            recommendations: typing.Iterable[REC],
+            recommendations_as_items_ids: typing.Iterable[REC],
+            recommendations_as_vecs: typing.Iterable[REC],
             embeddings_by_item: typing.Mapping[R_E, E],
     ) -> dict[str, float]:
         return {
-            'Precision@K': calc_precision_k(actual_interactions, recommendations),
-            'Recall@K': calc_recall_k(actual_interactions, recommendations),
-            'F1@k': calc_f1score_k(actual_interactions, recommendations),
+            'Precision@K': calc_precision_k(actual_interactions, recommendations_as_items_ids),
+            'Recall@K': calc_recall_k(actual_interactions, recommendations_as_items_ids),
+            'F1@k': calc_f1score_k(actual_interactions, recommendations_as_items_ids),
 
-            'Coverage': calc_coverage(actual_interactions, len(embeddings_by_item)),
-            'Diversity': calc_diversity(actual_interactions, self.similarity_func),
-            'Personalisation': calc_personalisation(recommendations),
-            'Novelty': calc_novelty(actual_interactions, recommendations, embeddings_by_item),
+            'Coverage': calc_coverage(recommendations_as_items_ids, len(embeddings_by_item)),
+            'Diversity': calc_diversity(recommendations_as_vecs, self.similarity_func),
+            'Personalisation': calc_personalisation(recommendations_as_items_ids),
+            'Novelty': calc_novelty(
+                actual_interactions,
+                recommendations_as_items_ids,
+                embeddings_by_item,
+                self.similarity_func,
+            ),
             'Serendipity': calc_serendipity(
                 actual_interactions,
-                recommendations,
+                recommendations_as_items_ids,
                 embeddings_by_item,
                 self.similarity_func,
             ),
@@ -58,7 +64,6 @@ def calc_precision_k(
         total_recommended += len(recommended_events)
 
     precision = total_recommended_relevant / total_recommended
-    print('Precision@K', precision)
     return precision
 
 
@@ -77,7 +82,6 @@ def calc_recall_k(
         total_relevant += len(actual_events)
 
     recall = total_recommended_relevant / total_relevant
-    print('Recall@K', recall)
     return recall
 
 
@@ -89,8 +93,10 @@ def calc_f1score_k(
     precision = calc_precision_k(actual_interactions, recommendations)
     recall = calc_recall_k(actual_interactions, recommendations)
 
-    f1score = 2 * (precision * recall) / (precision + recall)
-    print('F1@k', f1score)
+    if precision == 0 and recall == 0:
+        f1score = 0
+    else:
+        f1score = 2 * (precision * recall) / (precision + recall)
 
     return f1score
 
@@ -107,12 +113,11 @@ def calc_coverage(
     # total_recommended = set(events_by_id.keys())
     # coverage = len(unique_recommendations) / len(total_recommended)
     coverage = len(unique_recommendations) / total_uniq_items
-    print('Coverage', coverage)
     return coverage
 
 
 def calc_diversity(
-        recommendations: typing.Iterable[REC],
+        recommendation_vectors: typing.Iterable[E],
         similarity_func: F_SIM,
 ) -> float:
     """
@@ -122,14 +127,13 @@ def calc_diversity(
     total_acc = 0
     total_amount = 0
 
-    for recommended_events in recommendations:
+    for rec_vec in recommendation_vectors:
         # recommended_events_vectors = [rec.vector for rec in recommended_events]
-        intra_list_sim = calc_intra_list_similarity(recommended_events)
+        intra_list_sim = calc_intra_list_similarity(rec_vec, similarity_func)
         total_acc += intra_list_sim
         total_amount += 1
 
     diversity = 1 / (total_acc / total_amount)
-    print('Diversity', diversity)
     return diversity
 
 
@@ -144,8 +148,6 @@ def calc_personalisation(
     # count of each of recommended object
     recommendations_by_events_counter = Counter(itertools.chain.from_iterable(recommendations))
     total_recommendations = sum(recommendations_by_events_counter.values())
-    # print('total_recomendations', total_recommendations)
-    # print('total_recomendations_len', total_recommendations_len)
 
     total_acc = 0
     total_recommendations_len = 0
@@ -160,10 +162,7 @@ def calc_personalisation(
         total_acc += acc
         total_recommendations_len += 1
 
-    print('total_acc', total_acc)
-
     personalisation = 1 - (total_acc / total_recommendations_len)
-    print('Personalisation', personalisation)
     return personalisation
 
 
@@ -171,6 +170,7 @@ def calc_novelty(
         actual_interactions: typing.Iterable[REC],
         recommendations: typing.Iterable[REC],
         embeddings_by_item: typing.Mapping[R_E, E],
+        similarity_func: F_SIM,
 ) -> float:
     """
     Novelty / Unexpectedness
@@ -184,12 +184,11 @@ def calc_novelty(
         actual_embs = [embeddings_by_item[item_id] for item_id in actual]
         recommended_embs = [embeddings_by_item[item_id] for item_id in recommended]
 
-        unexpectedness = calc_lists_similarity(actual_embs, recommended_embs)
+        unexpectedness = calc_lists_similarity(actual_embs, recommended_embs, similarity_func)
         acc += unexpectedness
         amount += 1
 
     novelty = acc / amount
-    print('Novelty', )
     return novelty
 
 
@@ -226,7 +225,6 @@ def calc_serendipity(
         amount += 1
 
     serendipity = acc / amount
-    print('Serendipity', serendipity)
     return serendipity
 
 
@@ -245,9 +243,6 @@ def calc_intra_list_similarity(
     cur_elem_index = 0
     for i in range(cur_elem_index, len(vectors)):
         cur_elem = vectors[cur_elem_index]
-        # print('cur_elem', cur_elem)
-        # print('vectors[i]', vectors[i])
-        # acc += distance.cosine(cur_elem, vectors[i])
         acc += similarity_func(cur_elem, vectors[i])
         amount += 1
 
@@ -264,7 +259,6 @@ def calc_lists_similarity(
 
     for l_vec in left_list:
         for r_vec in right_list:
-            # sim = distance.cosine(l_vec, r_vec)
             sim = similarity_func(l_vec, r_vec)
             acc += sim
             amount += 1

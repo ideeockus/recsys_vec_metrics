@@ -1,0 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "recsys-vec-metrics"
+version = "2024.0.1"
+description = "Metrics for recomendation systems based on user / item vectors"
+readme = "README.md"
+license = {file = "LICENSE"}
