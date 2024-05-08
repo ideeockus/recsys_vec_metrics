@@ -133,6 +133,9 @@ def calc_diversity(
         total_acc += intra_list_sim
         total_amount += 1
 
+    if total_amount == 0:
+        return 0
+
     diversity = 1 / (total_acc / total_amount)
     return diversity
 
@@ -162,6 +165,9 @@ def calc_personalisation(
         total_acc += acc
         total_recommendations_len += 1
 
+    if total_recommendations_len == 0:
+        return 0
+
     personalisation = 1 - (total_acc / total_recommendations_len)
     return personalisation
 
@@ -187,6 +193,9 @@ def calc_novelty(
         unexpectedness = calc_lists_similarity(actual_embs, recommended_embs, similarity_func)
         acc += unexpectedness
         amount += 1
+
+    if amount == 0:
+        return 0
 
     novelty = acc / amount
     return novelty
@@ -224,6 +233,9 @@ def calc_serendipity(
         acc += serendipity
         amount += 1
 
+    if amount == 0:
+        return 0
+
     serendipity = acc / amount
     return serendipity
 
@@ -246,6 +258,9 @@ def calc_intra_list_similarity(
         acc += similarity_func(cur_elem, vectors[i])
         amount += 1
 
+    if amount == 0:
+        return 0
+
     return acc / amount
 
 
@@ -262,6 +277,10 @@ def calc_lists_similarity(
             sim = similarity_func(l_vec, r_vec)
             acc += sim
             amount += 1
+
+    if amount == 0:
+        return 0
+
     return acc / amount
 
 
